@@ -1,0 +1,137 @@
+---
+title: "Gas Exploration Induced Earthquakes"
+subtitle: "Groningen Gas Field, The Netherlands"
+author: "Maaike Miedema"
+date: "June 16, 2017"
+output:
+  ioslides_presentation: default
+  slidy_presentation: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r libraries}
+### LOAD LIBRARIES ###
+library(dplyr)
+library(stringr)
+library(plotly)
+library(lubridate)
+library(RColorBrewer)
+
+```
+```{r load_data}
+### LOAD DATA ###
+# source: http://knmi.nl/kennis-en-datacentrum/dataset/aardbevingscatalogus, 
+# file all_induced.csv downloaded June 14, 2017
+allData<-read.csv("all_induced.csv")
+```
+
+```{r clean_data }
+### CLEAN DATA ###
+# remove negative magnitudes
+# convert date and time 
+
+fill_out <- function(string){
+        # for times 00:00:00 to 09:59:59 time presentation needs one 
+        # or more zero's in front to process to a time
+        n <- 6-str_length(string)
+        while(n>0){
+                string<-paste("0", string, sep="")
+                n<-n-1
+        }
+        string
+}
+
+earthquake <- allData %>%
+        select(-EVALMODE)%>%
+        filter(MAG>0, LON>5.4)
+earthquake$TIME <-  earthquake$TIME %>% 
+        as.integer()%>%
+        as.character()
+earthquake$TIME <- lapply(earthquake$TIME, fill_out)
+earthquake <-mutate(earthquake, DATE_TIME= paste(YYMMDD, TIME, sep=""))
+earthquake$DATE_TIME <-ymd_hms(earthquake$DATE_TIME)
+```
+```{r factors}
+### FACTORIZE VARIABLES FOR HEATMAP PLOT
+earthquake <- mutate(earthquake, MAGFACTOR=MAG)
+earthquake$MAGFACTOR <- cut(earthquake$MAGFACTOR, breaks = 0.5*(0:8))
+earthquake <- mutate(earthquake, YEAR =year(DATE_TIME))
+
+
+
+# matrix for heatmap
+
+grouped<-group_by(earthquake, YEAR, MAG)
+number<-group_size(grouped)
+df<-data.frame(summarize(grouped), NUMBER=number)
+plotheat<-matrix(nrow=length(1986:2017), ncol=length(0:36), 0)
+rownames(plotheat)<-as.character(1986:2017)
+colnames(plotheat)<-as.character(0.1*(0:36))
+df<-mutate(df,YEAR=as.character(YEAR), MAG=as.character(MAG))
+
+fill_heat<-function(df, heat){
+        df<-arrange(df, YEAR, MAG)
+        k<-1
+        for (k in 1:dim(df)[1]){
+        heat[df$YEAR[k],df$MAG[k]]<-df$NUMBER[k]
+        }
+        heat
+}
+
+plotheat<-fill_heat(df,plotheat)
+
+```
+
+
+## Introduction
+
+The Groningen gas field in the North Eastern part of the Netherlands is exploited since 1963.   
+This gas exploration leads to subsidience and earthquakes, causing damage to buildings. 
+
+The quakes happen just below surface (+/- 3 km), therefore  
+damage to buildings is bigger than expected considering their magnitude alone.
+
+This presentation shows when and with what magnitude earthquakes have happened. 
+
+## Dutch Earthquake Data
+
+- Collected and distributed by the Royal Netherlands Meteorologic Institute.  
+- Describes: location, time, depth and magnitude. 
+- Three decades: from 1986-12-26 to 2017-06-14.
+
+We only consider data of earthquakes induced by gas exploration near Groningen
+
+
+## Earthquakes the last 30 years
+
+```{r scatterplot}
+plot_ly(earthquake,x =~DATE_TIME, y=~MAG, type="scatter") %>%
+        layout(yaxis=list(title="Magnitude (Richter)"), xaxis=list(title="Time"))
+```
+As you can see: as time goes by more and more quakes happen.
+
+
+## Earthquakes per year and magnitude
+
+```{r heatmap}
+plot_ly(x=colnames(plotheat),y=rownames(plotheat),z=~plotheat, type = "heatmap", 
+        colors="Spectral",colorbar=list(title="Number",len=0.4))%>%
+        layout(yaxis=list(title="Year"),xaxis=list(title="Magnitude (Richter)"))
+```
+
+  
+Remark: incomplete 2017 data, we are halfway the year.
+
+## Information
+
+- <b> Data:</b> all_induced.csv  
+from <a href="http://knmi.nl/kennis-en-datacentrum/dataset/aardbevingscatalogus">KNMI</a>,
+download June 14, 2017.
+- <b>Damage</b>, for an impression see: <a href=" http://www.dwarshuis.com/aardbevingen-groningen/zo-veel-mogelijk-fotos-van-de-aardbevings-schade/2.php">Photos</a>
+- <b> Code of slides</b> can be found at:  
+<a href=https://github.com/MaaikeMiedema/EarthquakesPresentation> github.com/MaaikeMiedema/EarthquakesPresentation </a>
+
+This presentation is made as an assignment for the Data Products Development class on Coursera.
